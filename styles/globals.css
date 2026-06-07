@@ -1,0 +1,10 @@
+/* styles/globals.css */
+/* Reset minimal — tout le CSS Forceux est inline dans pages/index.js */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+}
