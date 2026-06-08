@@ -18,7 +18,7 @@ export default function Home() {
       </Head>
       <style dangerouslySetInnerHTML={{__html: styles}} />
       <div id="root" dangerouslySetInnerHTML={{__html: markup}} />
-      <script dangerouslySetInnerHTML={{__html: scripts}} />
+      <script dangerouslySetInnerHTML={{__html: scripts + '\n\nif(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",initAuth);}else{initAuth();}' }} />
     </>
   )
 }
