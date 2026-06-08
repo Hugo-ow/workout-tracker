@@ -1,12 +1,10 @@
-*, *::before, *::after {
-  box-sizing: border-box;
-}
+*, *::before, *::after { box-sizing: border-box; }
 
-html, body, #__next {
+html, body, #__next, #root {
   margin: 0;
   padding: 0;
   height: 100%;
-  overflow: hidden;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
