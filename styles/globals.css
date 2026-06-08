@@ -1,4 +1,3 @@
-/* styles/globals.css */
 *, *::before, *::after {
   box-sizing: border-box;
 }
@@ -8,4 +7,6 @@ html, body, #__next {
   padding: 0;
   height: 100%;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
