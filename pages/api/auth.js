@@ -6,6 +6,8 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'POST') return res.status(405).json({ error: 'Méthode non autorisée' })
 
+  console.log('[auth] headers reçus:', JSON.stringify(req.headers))
+
   const token = req.headers['x-whop-user-token'] || req.body?.token
 
   // Pas de token → userId basé sur un identifiant stable côté client
