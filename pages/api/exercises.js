@@ -1,13 +1,12 @@
 // pages/api/exercises.js
 // Proxy vers ExerciseDB open source (oss.exercisedb.dev)
-// L'API pagine via un "cursor" — on suit les pages pour tout récupérer,
-// puis on met en cache en mémoire pour éviter de refetch à chaque requête.
+// L'API renvoie 25 exercices par page et pagine via meta.nextCursor
+// (= l'id du dernier exercice de la page). On suit le cursor jusqu'au bout.
 
 import { setCorsHeaders } from '../../lib/whopAuth'
 
 const BASE = 'https://oss.exercisedb.dev/api/v1'
 
-// Cache module-level (persiste tant que la fonction serverless reste chaude)
 let CACHE = null
 let CACHE_TS = 0
 const CACHE_TTL = 1000 * 60 * 60 * 6 // 6h
@@ -28,32 +27,45 @@ async function fetchAllExercises() {
   const all = []
   let cursor = null
   let pages = 0
-  // Sécurité : max 60 pages
-  while (pages < 60) {
+
+  while (pages < 70) {
     pages++
-    let url = `${BASE}/exercises?limit=100`
-    if (cursor) url += `&cursor=${encodeURIComponent(cursor)}`
+    // NE PAS envoyer de limit : l'API casse sa pagination si on le fait.
+    // Elle renvoie ~25/page par défaut, on suit simplement le cursor.
+    let url = `${BASE}/exercises`
+    if (cursor) url += `?cursor=${encodeURIComponent(cursor)}`
+
     const res = await fetch(url, { headers: { accept: 'application/json' } })
     if (!res.ok) throw new Error(`ExerciseDB ${res.status}`)
     const json = await res.json()
+
     const data = Array.isArray(json?.data) ? json.data : []
-    data.forEach(ex => {
+    if (data.length === 0) break
+
+    let added = 0
+    for (const ex of data) {
       const n = normalize(ex)
-      if (n.id && !seen.has(n.id)) { seen.add(n.id); all.push(n) }
-    })
-    const next = json?.meta?.nextCursor
-    const hasNext = json?.meta?.hasNextPage
-    if (!hasNext || !next || next === cursor) break
+      if (n.id && !seen.has(n.id)) { seen.add(n.id); all.push(n); added++ }
+    }
+
+    const meta = json?.meta || {}
+    const next = meta.nextCursor
+    // Stop si plus de page, pas de cursor, cursor inchangé, ou aucun nouvel ajout
+    if (meta.hasNextPage === false) break
+    if (!next || next === cursor) break
+    if (added === 0) break
     cursor = next
   }
+
   return all
 }
 
-async function getCatalog() {
+async function getCatalog(force) {
   const now = Date.now()
-  if (CACHE && (now - CACHE_TS) < CACHE_TTL) return CACHE
+  if (!force && CACHE && (now - CACHE_TS) < CACHE_TTL) return CACHE
   const all = await fetchAllExercises()
-  if (all.length) { CACHE = all; CACHE_TS = now }
+  // On ne met en cache que si on a récupéré une liste plausible (>200)
+  if (all.length > 200) { CACHE = all; CACHE_TS = now }
   return all
 }
 
@@ -62,10 +74,10 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'GET') return res.status(405).end()
 
-  const { bodyPart, search, limit = 80, offset = 0 } = req.query
+  const { bodyPart, search, limit = 80, offset = 0, refresh } = req.query
 
   try {
-    let list = await getCatalog()
+    let list = await getCatalog(refresh === '1')
 
     if (search) {
       const q = String(search).toLowerCase()
