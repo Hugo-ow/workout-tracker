@@ -1,14 +1,27 @@
 // pages/api/exercises.js
 // Proxy vers ExerciseDB open source (oss.exercisedb.dev)
-// L'API renvoie 25 exercices par page et pagine via meta.nextCursor
-// (= l'id du dernier exercice de la page). On suit le cursor jusqu'au bout.
+//
+// Découvertes clés sur cette API :
+//  - GET /exercises (sans param) : limité à 10, pagination cassée (cursor ignoré)
+//  - GET /exercises?bodyParts=chest : FILTRE correctement (ex: 191 résultats)
+//    et le cursor fonctionne ICI -> on pagine par bodyPart.
+//  - GET /bodyparts : liste des bodyParts disponibles.
+//
+// Stratégie : on charge par bodyPart à la demande (avec pagination cursor),
+// puis on met en cache chaque bodyPart en mémoire.
 
 import { setCorsHeaders } from '../../lib/whopAuth'
 
 const BASE = 'https://oss.exercisedb.dev/api/v1'
 
-let CACHE = null
-let CACHE_TS = 0
+// Tous les bodyParts ExerciseDB (depuis /bodyparts)
+const ALL_BODY_PARTS = [
+  'neck', 'lower arms', 'shoulders', 'cardio', 'upper arms',
+  'chest', 'lower legs', 'back', 'upper legs', 'waist',
+]
+
+const CACHE = {}        // { bodyPart: [exercices normalisés] }
+const CACHE_TS = {}     // { bodyPart: timestamp }
 const CACHE_TTL = 1000 * 60 * 60 * 6 // 6h
 
 function normalize(ex) {
@@ -22,18 +35,17 @@ function normalize(ex) {
   }
 }
 
-async function fetchAllExercises() {
+// Charge tous les exercices d'un bodyPart en suivant le cursor
+async function fetchBodyPart(bodyPart) {
   const seen = new Set()
   const all = []
   let cursor = null
   let pages = 0
 
-  while (pages < 70) {
+  while (pages < 40) {
     pages++
-    // NE PAS envoyer de limit : l'API casse sa pagination si on le fait.
-    // Elle renvoie ~25/page par défaut, on suit simplement le cursor.
-    let url = `${BASE}/exercises`
-    if (cursor) url += `?cursor=${encodeURIComponent(cursor)}`
+    let url = `${BASE}/exercises?bodyParts=${encodeURIComponent(bodyPart)}`
+    if (cursor) url += `&cursor=${encodeURIComponent(cursor)}`
 
     const res = await fetch(url, { headers: { accept: 'application/json' } })
     if (!res.ok) throw new Error(`ExerciseDB ${res.status}`)
@@ -49,9 +61,8 @@ async function fetchAllExercises() {
     }
 
     const meta = json?.meta || {}
-    const next = meta.nextCursor
-    // Stop si plus de page, pas de cursor, cursor inchangé, ou aucun nouvel ajout
     if (meta.hasNextPage === false) break
+    const next = meta.nextCursor
     if (!next || next === cursor) break
     if (added === 0) break
     cursor = next
@@ -60,12 +71,26 @@ async function fetchAllExercises() {
   return all
 }
 
-async function getCatalog(force) {
+async function getBodyPart(bodyPart, force) {
   const now = Date.now()
-  if (!force && CACHE && (now - CACHE_TS) < CACHE_TTL) return CACHE
-  const all = await fetchAllExercises()
-  // On ne met en cache que si on a récupéré une liste plausible (>200)
-  if (all.length > 200) { CACHE = all; CACHE_TS = now }
+  if (!force && CACHE[bodyPart] && (now - (CACHE_TS[bodyPart] || 0)) < CACHE_TTL) {
+    return CACHE[bodyPart]
+  }
+  const list = await fetchBodyPart(bodyPart)
+  if (list.length) { CACHE[bodyPart] = list; CACHE_TS[bodyPart] = now }
+  return list
+}
+
+// Pour "all" ou une recherche globale : on charge tous les bodyParts et on concatène
+async function getAll(force) {
+  const lists = await Promise.all(ALL_BODY_PARTS.map(bp => getBodyPart(bp, force).catch(() => [])))
+  const seen = new Set()
+  const all = []
+  for (const list of lists) {
+    for (const ex of list) {
+      if (ex.id && !seen.has(ex.id)) { seen.add(ex.id); all.push(ex) }
+    }
+  }
   return all
 }
 
@@ -74,21 +99,24 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'GET') return res.status(405).end()
 
-  const { bodyPart, search, limit = 80, offset = 0, refresh } = req.query
+  const { bodyPart, search, limit = 200, offset = 0, refresh } = req.query
+  const force = refresh === '1'
 
   try {
-    let list = await getCatalog(refresh === '1')
+    let list
 
     if (search) {
+      // Recherche globale sur tous les bodyParts
       const q = String(search).toLowerCase()
-      list = list.filter(ex => ex.name.toLowerCase().includes(q))
-    }
-    if (bodyPart && bodyPart !== 'all') {
-      const bp = String(bodyPart).toLowerCase()
-      list = list.filter(ex => ex.bodyPart.toLowerCase() === bp)
+      const all = await getAll(force)
+      list = all.filter(ex => ex.name.toLowerCase().includes(q))
+    } else if (bodyPart && bodyPart !== 'all') {
+      list = await getBodyPart(String(bodyPart).toLowerCase(), force)
+    } else {
+      list = await getAll(force)
     }
 
-    const lim = parseInt(limit) || 80
+    const lim = parseInt(limit) || 200
     const off = parseInt(offset) || 0
     const paged = list.slice(off, off + lim)
 
