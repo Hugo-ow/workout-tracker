@@ -365,9 +365,9 @@ export default function ForceuxApp() {
     if (drawerCache.current[key]) { setDrawerItems(drawerCache.current[key]); return }
     setDrawerLoading(true)
     try {
-      let url = '/api/exercises?limit=80&bodyPart=' + encodeURIComponent(bodyPart)
-      if (search) url = '/api/exercises?limit=40&search=' + encodeURIComponent(search)
-      const res = await fetch(url)
+      const params = new URLSearchParams({ limit: '80', bodyPart })
+      if (search) params.set('search', search)
+      const res = await fetch('/api/exercises?' + params.toString())
       const data = await res.json()
       const items = data.exercises || []
       drawerCache.current[key] = items
