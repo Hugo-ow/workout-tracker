@@ -24,6 +24,7 @@ function normalize(ex) {
 }
 
 async function fetchAllExercises() {
+  const seen = new Set()
   const all = []
   let cursor = null
   let pages = 0
@@ -36,7 +37,10 @@ async function fetchAllExercises() {
     if (!res.ok) throw new Error(`ExerciseDB ${res.status}`)
     const json = await res.json()
     const data = Array.isArray(json?.data) ? json.data : []
-    data.forEach(ex => all.push(normalize(ex)))
+    data.forEach(ex => {
+      const n = normalize(ex)
+      if (n.id && !seen.has(n.id)) { seen.add(n.id); all.push(n) }
+    })
     const next = json?.meta?.nextCursor
     const hasNext = json?.meta?.hasNextPage
     if (!hasNext || !next || next === cursor) break
