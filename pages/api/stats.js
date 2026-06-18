@@ -13,7 +13,7 @@ export default async function handler(req, res) {
   if (process.env.NODE_ENV === 'development' && !token) {
     userId = 'dev_user_local'
   } else {
-    userId = await verifyWhopToken(token)
+    userId = await verifyWhopToken(req.headers)
     if (!userId) return res.status(401).json({ error: 'Non autorisé' })
   }
 
