@@ -44,8 +44,8 @@ async function fetchBodyPart(bodyPart) {
 
   while (pages < 40) {
     pages++
-    let url = `${BASE}/exercises?bodyParts=${encodeURIComponent(bodyPart)}`
-    if (cursor) url += `&cursor=${encodeURIComponent(cursor)}`
+    let url = `${BASE}/exercises?bodyParts=${encodeURIComponent(bodyPart)}&limit=100`
+    if (cursor) url += `&after=${encodeURIComponent(cursor)}`
 
     const res = await fetch(url, { headers: { accept: 'application/json' } })
     if (!res.ok) throw new Error(`ExerciseDB ${res.status}`)
