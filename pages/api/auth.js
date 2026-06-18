@@ -1,29 +1,36 @@
 // pages/api/auth.js
-import { setCorsHeaders } from '../../lib/whopAuth'
+// Valide le token Whop et retourne le userId
+// Appelé par le front au chargement de l'app
+
+import { verifyWhopToken, setCorsHeaders } from '../../lib/whopAuth'
 
 export default async function handler(req, res) {
   setCorsHeaders(res)
-  if (req.method === 'OPTIONS') return res.status(200).end()
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Méthode non autorisée' })
 
-  console.log('[auth] headers reçus:', JSON.stringify(req.headers))
+  // Preflight CORS
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end()
+  }
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Méthode non autorisée' })
+  }
 
   const token = req.headers['x-whop-user-token'] || req.body?.token
 
-  // Pas de token → userId basé sur un identifiant stable côté client
   if (!token) {
-    return res.status(200).json({ 
-      userId: 'guest_user',
-      guest: true 
-    })
+    // Mode développement sans Whop : retourne un userId de test
+    if (process.env.NODE_ENV === 'development') {
+      return res.status(200).json({ userId: 'dev_user_local', dev: true })
+    }
+    return res.status(401).json({ error: 'Token manquant' })
   }
 
-  try {
-    const { verifyWhopToken } = await import('../../lib/whopAuth')
-    const userId = await verifyWhopToken(req.headers)
-    if (!userId) return res.status(200).json({ userId: 'guest_user', guest: true })
-    return res.status(200).json({ userId })
-  } catch (e) {
-    return res.status(200).json({ userId: 'guest_user', guest: true })
+  const userId = await verifyWhopToken(req.headers)
+
+  if (!userId) {
+    return res.status(401).json({ error: 'Token invalide ou expiré' })
   }
+
+  return res.status(200).json({ userId })
 }
