@@ -35,6 +35,8 @@ function normalize(ex) {
   }
 }
 
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)) }
+
 // Charge tous les exercices d'un bodyPart en suivant le cursor
 async function fetchBodyPart(bodyPart) {
   const seen = new Set()
@@ -47,7 +49,12 @@ async function fetchBodyPart(bodyPart) {
     let url = `${BASE}/exercises?bodyParts=${encodeURIComponent(bodyPart)}&limit=100`
     if (cursor) url += `&after=${encodeURIComponent(cursor)}`
 
-    const res = await fetch(url, { headers: { accept: 'application/json' } })
+    let res = await fetch(url, { headers: { accept: 'application/json' } })
+    if (res.status === 429) {
+      // Petite pause puis un seul retry
+      await sleep(400)
+      res = await fetch(url, { headers: { accept: 'application/json' } })
+    }
     if (!res.ok) throw new Error(`ExerciseDB ${res.status}`)
     const json = await res.json()
 
@@ -66,6 +73,7 @@ async function fetchBodyPart(bodyPart) {
     if (!next || next === cursor) break
     if (added === 0) break
     cursor = next
+    await sleep(120) // petite pause entre pages pour ne pas spammer l'API
   }
 
   return all
@@ -81,15 +89,37 @@ async function getBodyPart(bodyPart, force) {
   return list
 }
 
-// Pour "all" ou une recherche globale : on charge tous les bodyParts et on concatène
+async function searchExercises(term) {
+  const url = `${BASE}/exercises/search?search=${encodeURIComponent(term)}&threshold=0.4`
+  let res = await fetch(url, { headers: { accept: 'application/json' } })
+  if (res.status === 429) {
+    await sleep(400)
+    res = await fetch(url, { headers: { accept: 'application/json' } })
+  }
+  if (!res.ok) throw new Error(`ExerciseDB ${res.status}`)
+  const json = await res.json()
+  const data = Array.isArray(json?.data) ? json.data : []
+  // L'endpoint /search renvoie seulement exerciseId/name/gifUrl (pas de bodyParts/target)
+  return data.map(normalize)
+}
+
+// Pour "all" ou une recherche globale : on charge tous les bodyParts
+// SÉQUENTIELLEMENT (pas en parallèle) pour éviter le rate-limit 429 de l'API.
+// On donne la priorité au cache déjà chaud, et on borne le temps total
+// pour rester sous le timeout serverless.
 async function getAll(force) {
-  const lists = await Promise.all(ALL_BODY_PARTS.map(bp => getBodyPart(bp, force).catch(() => [])))
-  const seen = new Set()
   const all = []
-  for (const list of lists) {
+  const seen = new Set()
+  const deadline = Date.now() + 8000 // garde-fou : 8s max pour rester sous le timeout Vercel
+
+  for (const bp of ALL_BODY_PARTS) {
+    if (Date.now() > deadline) break // on arrête proprement, on renvoie ce qu'on a
+    let list = []
+    try { list = await getBodyPart(bp, force) } catch (e) { list = [] }
     for (const ex of list) {
       if (ex.id && !seen.has(ex.id)) { seen.add(ex.id); all.push(ex) }
     }
+    await sleep(80)
   }
   return all
 }
@@ -106,10 +136,8 @@ export default async function handler(req, res) {
     let list
 
     if (search) {
-      // Recherche globale sur tous les bodyParts
-      const q = String(search).toLowerCase()
-      const all = await getAll(force)
-      list = all.filter(ex => ex.name.toLowerCase().includes(q))
+      // Recherche via l'endpoint dédié /exercises/search (rapide, pas de pagination à gérer)
+      list = await searchExercises(String(search))
     } else if (bodyPart && bodyPart !== 'all') {
       list = await getBodyPart(String(bodyPart).toLowerCase(), force)
     } else {
