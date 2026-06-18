@@ -2,17 +2,7 @@
 // Toute la logique de l'app Forceux en React propre.
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-
-const BODY_PARTS = [
-  { value: 'all', label: 'All' },
-  { value: 'chest', label: 'Chest' },
-  { value: 'back', label: 'Back' },
-  { value: 'upper legs', label: 'Legs' },
-  { value: 'lower legs', label: 'Calves' },
-  { value: 'shoulders', label: 'Shoulders' },
-  { value: 'upper arms', label: 'Arms' },
-  { value: 'waist', label: 'Core' },
-]
+import { GROUPS, GROUP_COLORS, EXERCISE_LIBRARY, getFlatList } from './exerciseLibrary'
 
 function pad(n) { return String(n).padStart(2, '0') }
 function formatDuration(secs) {
@@ -56,11 +46,8 @@ export default function ForceuxApp() {
 
   // ---- Drawer ----
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [drawerBodyPart, setDrawerBodyPart] = useState('all')
+  const [drawerGroup, setDrawerGroup] = useState('Tous')
   const [drawerSearch, setDrawerSearch] = useState('')
-  const [drawerItems, setDrawerItems] = useState([])
-  const [drawerLoading, setDrawerLoading] = useState(false)
-  const drawerCache = useRef({})
 
   // ---- Rest timer ----
   const [restVisible, setRestVisible] = useState(false)
@@ -354,41 +341,23 @@ export default function ForceuxApp() {
   // ====================================================
   function openDrawer() {
     setDrawerOpen(true)
-    setDrawerBodyPart('chest')
+    setDrawerGroup('Tous')
     setDrawerSearch('')
   }
   function closeDrawer() { setDrawerOpen(false) }
 
-  const loadDrawer = useCallback(async (bodyPart, search) => {
-    const key = bodyPart + '|' + (search || '')
-    if (drawerCache.current[key]) { setDrawerItems(drawerCache.current[key]); return }
-    setDrawerLoading(true)
-    try {
-      const params = new URLSearchParams({ limit: '80', bodyPart })
-      if (search) params.set('search', search)
-      const res = await fetch('/api/exercises?' + params.toString())
-      const data = await res.json()
-      const items = data.exercises || []
-      drawerCache.current[key] = items
-      setDrawerItems(items)
-    } catch (e) {
-      setDrawerItems([])
-    } finally {
-      setDrawerLoading(false)
-    }
-  }, [])
-
-  // Charge dès l'ouverture du drawer et à chaque changement de bodyPart/recherche
-  useEffect(() => {
-    if (!drawerOpen) return
-    const t = setTimeout(() => { loadDrawer(drawerBodyPart, drawerSearch.trim()) }, drawerSearch ? 300 : 0)
-    return () => clearTimeout(t)
-  }, [drawerSearch, drawerBodyPart, drawerOpen, loadDrawer])
+  // Filtrage local, synchrone, instantané — pas d'appel réseau
+  const drawerItems = (() => {
+    const q = drawerSearch.trim().toLowerCase()
+    let list = getFlatList()
+    if (drawerGroup !== 'Tous') list = list.filter(ex => ex.group === drawerGroup)
+    if (q) list = list.filter(ex => ex.name.toLowerCase().includes(q) || ex.group.toLowerCase().includes(q))
+    return list
+  })()
 
   function pickExercise(ex) {
     closeDrawer()
-    const name = ex.name.charAt(0).toUpperCase() + ex.name.slice(1)
-    addExercise(name, ex.bodyPart || 'Other')
+    addExercise(ex.name, ex.group)
   }
 
   // ====================================================
@@ -563,22 +532,19 @@ export default function ForceuxApp() {
           </div>
         </div>
         <div className="group-tabs">
-          {BODY_PARTS.map(bp => (
-            <button key={bp.value} className={'group-tab' + (drawerBodyPart === bp.value ? ' active' : '')}
-              onClick={() => { setDrawerBodyPart(bp.value); setDrawerSearch('') }}>{bp.label}</button>
+          {GROUPS.map(g => (
+            <button key={g.value} className={'group-tab' + (drawerGroup === g.value ? ' active' : '')}
+              onClick={() => setDrawerGroup(g.value)}>{g.label}</button>
           ))}
         </div>
         <div className="drawer-list">
-          {drawerLoading && <div className="drawer-empty">Chargement…</div>}
-          {!drawerLoading && drawerItems.length === 0 && <div className="drawer-empty">Aucun résultat.</div>}
-          {!drawerLoading && drawerItems.map(ex => (
-            <div key={ex.id} className="drawer-item" onClick={() => pickExercise(ex)}>
-              <div className="drawer-item-gif">
-                {ex.gifUrl ? <img src={ex.gifUrl} loading="lazy" alt="" /> : null}
-              </div>
+          {drawerItems.length === 0 && <div className="drawer-empty">Aucun résultat.</div>}
+          {drawerItems.map(ex => (
+            <div key={ex.name} className="drawer-item" onClick={() => pickExercise(ex)}>
+              <div className="drawer-item-dot" style={{ background: GROUP_COLORS[ex.group] || GROUP_COLORS.Autre }} />
               <div className="drawer-item-info">
                 <div className="drawer-item-name">{ex.name}</div>
-                <div className="drawer-item-target">{ex.target || ex.bodyPart}</div>
+                <div className="drawer-item-target">{ex.group}</div>
               </div>
             </div>
           ))}
@@ -749,7 +715,7 @@ export default function ForceuxApp() {
               <div className="exercise-block-header">
                 <div>
                   <div className="exercise-block-title">{ex.name}</div>
-                  <div className="exercise-block-group">{ex.group}</div>
+                  <div className="exercise-block-group" style={{ color: GROUP_COLORS[ex.group] || GROUP_COLORS.Autre }}>{ex.group}</div>
                 </div>
                 <button className="rest-adj" onClick={() => removeExercise(ex.uid)} style={{ border: 'none', background: 'none' }}>✕</button>
               </div>
