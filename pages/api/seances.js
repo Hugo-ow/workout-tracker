@@ -14,11 +14,11 @@ export default async function handler(req, res) {
   const token = req.headers['x-whop-user-token']
   let userId
 
- if (!token) {
-    userId = 'guest_user'
+  if (process.env.NODE_ENV === 'development' && !token) {
+    userId = 'dev_user_local'
   } else {
     userId = await verifyWhopToken(req.headers)
-    if (!userId) userId = 'guest_user'
+    if (!userId) return res.status(401).json({ error: 'Non autorisé' })
   }
 
   // ── POST : Sauvegarder une séance ──
