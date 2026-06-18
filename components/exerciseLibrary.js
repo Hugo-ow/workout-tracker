@@ -81,7 +81,8 @@ export const EXERCISE_LIBRARY = {
     'Good Morning barre',
   ],
   Jambes: [
-    'Squat barre (back squat)',
+    'Squat barre haute (high bar)',
+    'Squat barre basse (low bar)',
     'Squat avant (front squat)',
     'Squat bulgare (split squat)',
     'Squat sumo',
@@ -94,7 +95,6 @@ export const EXERCISE_LIBRARY = {
     'Squat chaînes',
     'Squat safety bar (SSB)',
     'Squat ceinture (belt squat)',
-    'Squat déficit',
     'Leg press',
     'Hack squat',
     'Fentes marchées haltères',
