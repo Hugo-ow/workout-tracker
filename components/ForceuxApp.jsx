@@ -354,9 +354,8 @@ export default function ForceuxApp() {
   // ====================================================
   function openDrawer() {
     setDrawerOpen(true)
-    setDrawerBodyPart('all')
+    setDrawerBodyPart('chest')
     setDrawerSearch('')
-    loadDrawer('all', '')
   }
   function closeDrawer() { setDrawerOpen(false) }
 
@@ -379,10 +378,10 @@ export default function ForceuxApp() {
     }
   }, [])
 
-  // debounce search
+  // Charge dès l'ouverture du drawer et à chaque changement de bodyPart/recherche
   useEffect(() => {
     if (!drawerOpen) return
-    const t = setTimeout(() => { loadDrawer(drawerBodyPart, drawerSearch.trim()) }, 300)
+    const t = setTimeout(() => { loadDrawer(drawerBodyPart, drawerSearch.trim()) }, drawerSearch ? 300 : 0)
     return () => clearTimeout(t)
   }, [drawerSearch, drawerBodyPart, drawerOpen, loadDrawer])
 
