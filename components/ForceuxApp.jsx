@@ -468,15 +468,9 @@ export default function ForceuxApp() {
           <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--text3)', textAlign: 'center', marginBottom: 20, lineHeight: 1.5 }}>
             Donne un nom à ta séance ou laisse vide pour continuer.
           </p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBottom: 16, justifyContent: 'center' }}>
-            {['PPL — Push', 'PPL — Pull', 'Legs', 'Full Body', 'Upper Body', 'Cardio'].map(preset => (
-              <button key={preset} className="np-btn" style={{ padding: '6px 14px', borderRadius: 100, background: 'var(--surface)', border: '1px solid var(--border)', color: nameInput === preset ? 'var(--accent)' : 'var(--text2)', fontSize: 12, fontWeight: 600 }}
-                onClick={() => setNameInput(preset)}>{preset}</button>
-            ))}
-          </div>
           <input className="set-input" style={{ textAlign: 'left', padding: '12px 14px', marginBottom: 20, fontSize: 15 }}
             type="text" value={nameInput} onChange={e => setNameInput(e.target.value)}
-            placeholder="Ex: PPL Push A, Chest Day…" maxLength={40}
+            placeholder="Ex: Squat & Bench, Hypertrophie…" maxLength={40}
             onKeyDown={e => { if (e.key === 'Enter') confirmName() }} />
           <div style={{ display: 'flex', gap: 10 }}>
             <button className="btn-secondary" onClick={() => setNameModalOpen(false)}>Annuler</button>
