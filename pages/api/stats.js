@@ -9,7 +9,6 @@ export default async function handler(req, res) {
 
   const token = req.headers['x-whop-user-token']
   let userId
-
   if (process.env.NODE_ENV === 'development' && !token) {
     userId = 'dev_user_local'
   } else {
@@ -18,18 +17,12 @@ export default async function handler(req, res) {
   }
 
   try {
-    // ── 1. Séances ──
+    // ── 1. Toutes les séances ──
     const { data: seances } = await supabase
       .from('seances')
       .select('id, date, duree_secondes, volume_total_kg, nb_series')
       .eq('user_id', userId)
       .order('date', { ascending: false })
-
-    const totalSeances = seances?.length || 0
-    const totalVolume  = seances?.reduce((s, x) => s + (x.volume_total_kg || 0), 0) || 0
-    const totalDuree   = seances?.reduce((s, x) => s + (x.duree_secondes || 0), 0) || 0
-    const totalSeries  = seances?.reduce((s, x) => s + (x.nb_series || 0), 0) || 0
-    const dureeMoyenne = totalSeances ? Math.round(totalDuree / totalSeances / 60) : 0
 
     // ── 2. Streak ──
     let streak = 0
@@ -46,18 +39,7 @@ export default async function handler(req, res) {
       }
     }
 
-    // ── 3. Volume 8 dernières semaines ──
-    const volumeParSemaine = []
-    for (let i = 7; i >= 0; i--) {
-      const debut = new Date(); debut.setDate(debut.getDate() - i * 7 - 6); debut.setHours(0,0,0,0)
-      const fin   = new Date(); fin.setDate(fin.getDate() - i * 7); fin.setHours(23,59,59,999)
-      const vol = seances
-        ?.filter(s => new Date(s.date) >= debut && new Date(s.date) <= fin)
-        ?.reduce((sum, s) => sum + (s.volume_total_kg || 0), 0) || 0
-      volumeParSemaine.push({ label: `S${8 - i}`, volume: Math.round(vol) })
-    }
-
-    // Volume cette semaine
+    // ── 3. Volume cette semaine ──
     const debutSemaine = new Date()
     debutSemaine.setDate(debutSemaine.getDate() - debutSemaine.getDay())
     debutSemaine.setHours(0,0,0,0)
@@ -65,19 +47,19 @@ export default async function handler(req, res) {
       ?.filter(s => new Date(s.date) >= debutSemaine)
       ?.reduce((sum, s) => sum + (s.volume_total_kg || 0), 0) || 0
 
-    // Séances ce mois
+    // ── 4. Séances ce mois ──
     const debutMois = new Date(); debutMois.setDate(1); debutMois.setHours(0,0,0,0)
     const seancesMois = seances?.filter(s => new Date(s.date) >= debutMois)?.length || 0
 
-    // ── 4. PRs ──
+    // ── 5. PRs — charge max + date (pas de 1RM estimé) ──
     const { data: prs } = await supabase
       .from('records_pr')
-      .select('*')
+      .select('exercice, best_kg, best_reps, updated_at')
       .eq('user_id', userId)
-      .order('estimated_1rm', { ascending: false })
+      .order('best_kg', { ascending: false })
       .limit(20)
 
-    // ── 5. Séries par mouvement cette semaine (Squat, Bench, Deadlift) ──
+    // ── 6. Séries par mouvement cette semaine (Squat, Bench, Deadlift + variantes) ──
     const debutSemaineIso = debutSemaine.toISOString()
     const { data: setsSemaine } = await supabase
       .from('seances_sets')
@@ -87,66 +69,86 @@ export default async function handler(req, res) {
       .gt('kg', 0)
       .gt('reps', 0)
 
-    // Mots-clés pour identifier les 3 grands lifts
     const lifts = {
-      squat:    { keywords: ['squat', 'hack squat', 'leg press'], series: 0, volume: 0 },
-      bench:    { keywords: ['couché', 'couche', 'bench', 'développé'], series: 0, volume: 0 },
-      deadlift: { keywords: ['terre', 'deadlift', 'rdl', 'roumain', 'sumo'], series: 0, volume: 0 },
+      squat: {
+        // Squat et toutes ses variantes (tempo, pause, box, pin, etc.)
+        // Exclut explicitement "hack squat" et "gobelet" qui sont différents
+        keywords: ['squat'],
+        excludes: [],
+        series: 0,
+      },
+      bench: {
+        // Développé couché et variantes (larsen, spoto, pause, tempo, feet up, etc.)
+        keywords: ['couché', 'couche', 'bench', 'développé couché'],
+        excludes: ['décliné', 'incliné', 'militaire', 'arnold'],
+        series: 0,
+      },
+      deadlift: {
+        // Soulevé de terre et variantes (déficit, block pulls, sumo, pause, tempo, etc.)
+        keywords: ['soulevé', 'deadlift', 'rdl', 'terre'],
+        excludes: [],
+        series: 0,
+      },
     }
 
     setsSemaine?.forEach(s => {
       const nom = (s.exercice || '').toLowerCase()
       for (const [key, lift] of Object.entries(lifts)) {
-        if (lift.keywords.some(k => nom.includes(k))) {
-          lift.series++
-          lift.volume += (s.kg || 0) * (s.reps || 0)
-          break
-        }
+        const matches = lift.keywords.some(k => nom.includes(k))
+        const excluded = lift.excludes.some(e => nom.includes(e))
+        if (matches && !excluded) { lift.series++; break }
       }
     })
 
     const seriesSemaine = {
-      squat:    { series: lifts.squat.series,    volume: Math.round(lifts.squat.volume) },
-      bench:    { series: lifts.bench.series,    volume: Math.round(lifts.bench.volume) },
-      deadlift: { series: lifts.deadlift.series, volume: Math.round(lifts.deadlift.volume) },
+      squat:    { series: lifts.squat.series },
+      bench:    { series: lifts.bench.series },
+      deadlift: { series: lifts.deadlift.series },
     }
 
-    // ── 6. Évolution 1RM (optionnel, pour graphique futur) ──
-    const exerciceParam = req.query.exercice
-    let evolution1rm = []
-    if (exerciceParam) {
-      const { data: sets1rm } = await supabase
-        .from('seances_sets')
-        .select('kg, reps, created_at')
-        .eq('user_id', userId)
-        .eq('exercice', exerciceParam)
-        .gt('kg', 0).gt('reps', 0)
-        .order('created_at', { ascending: true })
-        .limit(200)
+    // ── 7. Graphique : séries totales par semaine (4 dernières semaines glissantes) ──
+    // Récupère tous les sets du mois glissant pour le graphique
+    const debut4semaines = new Date()
+    debut4semaines.setDate(debut4semaines.getDate() - 27)
+    debut4semaines.setHours(0,0,0,0)
 
-      const byDate = {}
-      sets1rm?.forEach(s => {
-        const date = s.created_at.split('T')[0]
-        const rm = s.reps === 1 ? s.kg : Math.round((s.kg / (1.0278 - 0.0278 * s.reps)) * 10) / 10
-        if (!byDate[date] || rm > byDate[date]) byDate[date] = rm
-      })
-      evolution1rm = Object.entries(byDate).map(([date, rm]) => ({ date, rm }))
+    const { data: setsGraphique } = await supabase
+      .from('seances_sets')
+      .select('created_at')
+      .eq('user_id', userId)
+      .gte('created_at', debut4semaines.toISOString())
+      .gt('kg', 0)
+      .gt('reps', 0)
+
+    // 4 semaines glissantes : S-3, S-2, S-1, S en cours
+    const seriesParSemaine = []
+    const now = new Date()
+    for (let i = 3; i >= 0; i--) {
+      const fin = new Date(now)
+      fin.setDate(fin.getDate() - i * 7)
+      fin.setHours(23,59,59,999)
+      const debut = new Date(fin)
+      debut.setDate(debut.getDate() - 6)
+      debut.setHours(0,0,0,0)
+
+      const count = setsGraphique?.filter(s => {
+        const d = new Date(s.created_at)
+        return d >= debut && d <= fin
+      }).length || 0
+
+      const label = i === 0 ? 'Cette sem.' : `S-${i}`
+      seriesParSemaine.push({ label, series: count })
     }
 
     return res.status(200).json({
       resume: {
-        totalSeances,
-        totalVolume:   Math.round(totalVolume),
-        totalSeries,
-        dureeMoyenne,
         streak,
         volumeSemaine: Math.round(volumeSemaine),
         seancesMois,
       },
-      volumeParSemaine,
       prs: prs || [],
       seriesSemaine,
-      evolution1rm,
+      seriesParSemaine,
     })
 
   } catch (err) {
