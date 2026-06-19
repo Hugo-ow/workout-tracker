@@ -801,24 +801,41 @@ export default function ForceuxApp() {
             <LiftSeries label="Bench" n={stats?.seriesSemaine?.bench?.series} border />
             <LiftSeries label="Deadlift" n={stats?.seriesSemaine?.deadlift?.series} />
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 24 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 10, marginBottom: 24 }}>
             <div className="stat-card">
               <div className="stat-card-val accent-val">
                 {(() => { const v = stats?.resume?.volumeSemaine || 0; return v >= 1000 ? (v / 1000).toFixed(1) + 't' : Math.round(v) + 'kg' })()}
               </div>
               <div className="stat-card-label">Volume cette semaine</div>
             </div>
+          </div>
+
+          {/* Bloc 3 : Tendance mensuelle */}
+          <div className="section-label">Tendance mensuelle</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
             <div className="stat-card">
               <div className="stat-card-val">{stats?.resume?.seancesMois || 0}</div>
               <div className="stat-card-label">Séances ce mois</div>
             </div>
+            <div className="stat-card">
+              <div className="stat-card-val accent-val">
+                {(() => {
+                  const d = stats?.rpeParSemaine
+                  if (!d) return '—'
+                  const last = d[d.length - 1]
+                  return last?.rpe != null ? last.rpe : '—'
+                })()}
+              </div>
+              <div className="stat-card-label">RPE moy. cette sem.</div>
+            </div>
           </div>
-
-          {/* Bloc 3 : Graphique séries par semaine (4 semaines glissantes) */}
-          <div className="section-label">Tendance mensuelle</div>
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: 16, marginBottom: 24 }}>
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: 16, marginBottom: 10 }}>
             <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '.06em' }}>Séries totales / semaine</div>
-            <SeriesLineChart data={stats?.seriesParSemaine || []} />
+            <SeriesLineChart data={stats?.seriesParSemaine || []} valueKey="series" color="var(--accent)" />
+          </div>
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: 16, marginBottom: 24 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '.06em' }}>Intensité RPE moy. / semaine <span style={{ color: 'var(--text3)', fontWeight: 500 }}>(Squat · Bench · DL)</span></div>
+            <SeriesLineChart data={stats?.rpeParSemaine || []} valueKey="rpe" color="#8338EC" minY={5} maxY={10} unit="" />
           </div>
 
         </div>
@@ -988,42 +1005,62 @@ function LiftSeries({ label, n, border }) {
   )
 }
 
-function SeriesLineChart({ data }) {
+function SeriesLineChart({ data, valueKey = 'series', color = 'var(--accent)', minY, maxY }) {
   if (!data.length) return <div style={{ color: 'var(--text3)', fontSize: 13, textAlign: 'center', padding: 20 }}>Pas encore de données.</div>
-  const max = Math.max(...data.map(d => d.series), 1)
-  const W = 100, H = 80, PAD = 8
+
+  const values = data.map(d => d[valueKey]).filter(v => v != null)
+  if (!values.length) return <div style={{ color: 'var(--text3)', fontSize: 13, textAlign: 'center', padding: 16 }}>Renseigne des RPE pendant tes séances pour voir la tendance.</div>
+
+  const lo = minY != null ? minY : Math.min(...values)
+  const hi = maxY != null ? maxY : Math.max(...values, lo + 1)
+  const range = hi - lo || 1
+
+  const W = 100, H = 80, PAD = 10
+  // Calcule les points uniquement pour les valeurs non-null
   const pts = data.map((d, i) => {
+    const v = d[valueKey]
+    if (v == null) return null
     const x = PAD + (i / (data.length - 1 || 1)) * (W - PAD * 2)
-    const y = PAD + (1 - d.series / max) * (H - PAD * 2)
-    return { x, y, ...d }
+    const y = PAD + (1 - (v - lo) / range) * (H - PAD * 2)
+    return { x, y, v, label: d.label, i }
   })
-  const pathD = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
-  const fillD = `${pathD} L ${pts[pts.length - 1].x} ${H} L ${pts[0].x} ${H} Z`
+
+  // Segments de ligne (ne trace pas à travers les nulls)
+  const segments = []
+  let current = []
+  for (const pt of pts) {
+    if (pt) { current.push(pt) }
+    else { if (current.length > 1) segments.push(current); current = [] }
+  }
+  if (current.length > 1) segments.push(current)
+  if (current.length === 1) segments.push(current) // point isolé
+
   return (
     <div>
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 80, overflow: 'visible' }}>
-        {/* Lignes de grille horizontales */}
         {[0, 0.5, 1].map((v, i) => (
           <line key={i} x1={PAD} y1={PAD + (1 - v) * (H - PAD * 2)} x2={W - PAD} y2={PAD + (1 - v) * (H - PAD * 2)}
             stroke="var(--divider)" strokeWidth="0.5" />
         ))}
-        {/* Zone remplie */}
-        <path d={fillD} fill="rgba(230,57,70,0.08)" />
-        {/* Ligne */}
-        <path d={pathD} fill="none" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        {/* Points */}
-        {pts.map((p, i) => (
-          <circle key={i} cx={p.x} cy={p.y} r="2.5" fill="var(--accent)" />
+        {segments.map((seg, si) => seg.length > 1 && (
+          <path key={si}
+            d={seg.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')}
+            fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         ))}
-        {/* Valeurs au-dessus des points */}
-        {pts.map((p, i) => p.series > 0 && (
-          <text key={i} x={p.x} y={p.y - 5} textAnchor="middle" fontSize="5" fill="var(--text2)" fontWeight="700">{p.series}</text>
+        {pts.map((p, i) => p && (
+          <g key={i}>
+            <circle cx={p.x} cy={p.y} r="2.5" fill={color} />
+            <text x={p.x} y={p.y - 5} textAnchor="middle" fontSize="5" fill="var(--text2)" fontWeight="700">{p.v}</text>
+          </g>
+        ))}
+        {pts.map((p, i) => !p && (
+          <text key={i} x={PAD + (i / (data.length - 1 || 1)) * (W - PAD * 2)} y={H / 2}
+            textAnchor="middle" fontSize="5" fill="var(--text3)">—</text>
         ))}
       </svg>
-      {/* Labels en abscisse */}
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
         {data.map((d, i) => (
-          <div key={i} style={{ fontSize: 10, fontWeight: 600, color: i === data.length - 1 ? 'var(--accent)' : 'var(--text3)', textAlign: 'center', flex: 1 }}>{d.label}</div>
+          <div key={i} style={{ fontSize: 10, fontWeight: 600, color: i === data.length - 1 ? color : 'var(--text3)', textAlign: 'center', flex: 1 }}>{d.label}</div>
         ))}
       </div>
     </div>
