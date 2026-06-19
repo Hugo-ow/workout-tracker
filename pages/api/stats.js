@@ -161,6 +161,14 @@ export default async function handler(req, res) {
       rpeParSemaine.push({ label, rpe: rpeAvg, count: rpeValues.length })
     }
 
+    // ── 8. Répartition mensuelle SBD vs Accessoires ──
+    const setsMois = setsGraphique?.filter(s => new Date(s.created_at) >= debutMois) || []
+    const sbdMois = setsMois.filter(s => isMainLift((s.exercice || '').toLowerCase())).length
+    const accMois = setsMois.length - sbdMois
+    const repartition = setsMois.length > 0
+      ? { sbd: sbdMois, accessoires: accMois, total: setsMois.length }
+      : null
+
     return res.status(200).json({
       resume: {
         streak,
@@ -171,6 +179,7 @@ export default async function handler(req, res) {
       seriesSemaine,
       seriesParSemaine,
       rpeParSemaine,
+      repartition,
     })
 
   } catch (err) {
