@@ -96,6 +96,14 @@ input[type=number]{-moz-appearance:textfield;}
 .set-row.pr-flash{animation:prFlash .6s ease;}
 @keyframes prFlash{0%{background:rgba(255,183,3,.3);}100%{background:rgba(255,183,3,.06);}}
 
+.rpe-row{display:flex;align-items:center;gap:5px;padding:6px 14px 7px;background:rgba(255,255,255,.02);border-bottom:1px solid var(--divider);overflow-x:auto;scrollbar-width:none;}
+.rpe-row::-webkit-scrollbar{display:none;}
+.rpe-label{font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.06em;flex-shrink:0;margin-right:2px;}
+.rpe-chip{flex-shrink:0;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:4px 7px;font-family:'Inter',sans-serif;font-size:11px;font-weight:700;color:var(--text3);cursor:pointer;transition:all .12s;}
+.rpe-chip:hover{border-color:var(--accent);color:var(--accent);}
+.rpe-chip.selected{background:rgba(230,57,70,.15);border-color:var(--accent);color:var(--accent);}
+.rpe-badge{font-size:9px;font-weight:800;color:var(--accent);line-height:1;margin-top:2px;}
+
 .add-set-btn{width:100%;background:none;border:none;padding:10px 14px;display:flex;align-items:center;gap:6px;color:var(--accent);font-family:'Inter',sans-serif;font-size:13px;font-weight:700;cursor:pointer;border-top:1px solid var(--divider);transition:background .15s;}
 .add-set-btn:hover{background:rgba(230,57,70,.05);}
 .add-exercise-btn{width:100%;background:var(--surface);border:1.5px dashed var(--border);border-radius:14px;padding:15px 16px;display:flex;align-items:center;justify-content:center;gap:8px;color:var(--text3);font-family:'Inter',sans-serif;font-size:14px;font-weight:700;cursor:pointer;transition:all .15s;margin-bottom:12px;}
