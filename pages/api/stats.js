@@ -106,22 +106,34 @@ export default async function handler(req, res) {
       deadlift: { series: lifts.deadlift.series },
     }
 
-    // ── 7. Graphique : séries totales par semaine (4 dernières semaines glissantes) ──
-    // Récupère tous les sets du mois glissant pour le graphique
+    // ── 7. Graphique : séries totales + RPE moyen par semaine (4 semaines glissantes) ──
     const debut4semaines = new Date()
     debut4semaines.setDate(debut4semaines.getDate() - 27)
     debut4semaines.setHours(0,0,0,0)
 
     const { data: setsGraphique } = await supabase
       .from('seances_sets')
-      .select('created_at')
+      .select('created_at, exercice, rpe, kg, reps')
       .eq('user_id', userId)
       .gte('created_at', debut4semaines.toISOString())
       .gt('kg', 0)
       .gt('reps', 0)
 
-    // 4 semaines glissantes : S-3, S-2, S-1, S en cours
+    // Mots-clés grands lifts (réutilisés pour le RPE)
+    const liftKeywords = [
+      { keywords: ['squat'], excludes: [] },
+      { keywords: ['couché', 'couche', 'bench', 'développé couché'], excludes: ['décliné', 'incliné', 'militaire', 'arnold'] },
+      { keywords: ['soulevé', 'deadlift', 'rdl', 'terre'], excludes: [] },
+    ]
+    function isMainLift(nom) {
+      return liftKeywords.some(l =>
+        l.keywords.some(k => nom.includes(k)) && !l.excludes.some(e => nom.includes(e))
+      )
+    }
+
+    // 4 semaines glissantes
     const seriesParSemaine = []
+    const rpeParSemaine = []
     const now = new Date()
     for (let i = 3; i >= 0; i--) {
       const fin = new Date(now)
@@ -131,13 +143,22 @@ export default async function handler(req, res) {
       debut.setDate(debut.getDate() - 6)
       debut.setHours(0,0,0,0)
 
-      const count = setsGraphique?.filter(s => {
+      const weekSets = setsGraphique?.filter(s => {
         const d = new Date(s.created_at)
         return d >= debut && d <= fin
-      }).length || 0
+      }) || []
 
       const label = i === 0 ? 'Cette sem.' : `S-${i}`
-      seriesParSemaine.push({ label, series: count })
+      seriesParSemaine.push({ label, series: weekSets.length })
+
+      // RPE moyen sur Squat+Bench+DL uniquement
+      const rpeValues = weekSets
+        .filter(s => s.rpe != null && isMainLift((s.exercice || '').toLowerCase()))
+        .map(s => s.rpe)
+      const rpeAvg = rpeValues.length
+        ? Math.round((rpeValues.reduce((a, b) => a + b, 0) / rpeValues.length) * 10) / 10
+        : null
+      rpeParSemaine.push({ label, rpe: rpeAvg, count: rpeValues.length })
     }
 
     return res.status(200).json({
@@ -149,6 +170,7 @@ export default async function handler(req, res) {
       prs: prs || [],
       seriesSemaine,
       seriesParSemaine,
+      rpeParSemaine,
     })
 
   } catch (err) {
