@@ -79,6 +79,7 @@ export default async function handler(req, res) {
               kg: s.kg || null,
               reps: s.reps || null,
               is_pr: s.isPR || false,
+              rpe: s.rpe ?? null,
             })
           }
         })
