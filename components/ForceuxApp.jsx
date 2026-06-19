@@ -830,6 +830,10 @@ export default function ForceuxApp() {
             </div>
           </div>
           <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: 16, marginBottom: 10 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '.06em' }}>Répartition SBD vs Accessoires</div>
+            <SBDPieChart data={stats?.repartition} />
+          </div>
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: 16, marginBottom: 10 }}>
             <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '.06em' }}>Séries totales / semaine</div>
             <SeriesLineChart data={stats?.seriesParSemaine || []} valueKey="series" color="var(--accent)" />
           </div>
@@ -1062,6 +1066,69 @@ function SeriesLineChart({ data, valueKey = 'series', color = 'var(--accent)', m
         {data.map((d, i) => (
           <div key={i} style={{ fontSize: 10, fontWeight: 600, color: i === data.length - 1 ? color : 'var(--text3)', textAlign: 'center', flex: 1 }}>{d.label}</div>
         ))}
+      </div>
+    </div>
+  )
+}
+
+function SBDPieChart({ data }) {
+  if (!data || data.total === 0) {
+    return <div style={{ color: 'var(--text3)', fontSize: 13, textAlign: 'center', padding: 16 }}>Pas encore de données ce mois.</div>
+  }
+
+  const sbdPct  = Math.round((data.sbd / data.total) * 100)
+  const accPct  = 100 - sbdPct
+
+  // SVG pie chart (cercle = 2πr, r=30, cx=cy=35)
+  const R = 30, CX = 35, CY = 35
+  const circ = 2 * Math.PI * R
+
+  // Arc SBD (accent rouge)
+  const sbdDash  = (sbdPct / 100) * circ
+  const accDash  = (accPct / 100) * circ
+
+  // SBD commence à -90° (top), accessoires ensuite
+  const sbdOffset  = circ * 0.25 // rotation -90°
+  const accOffset  = sbdOffset - sbdDash
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+      <svg viewBox="0 0 70 70" style={{ width: 110, height: 110, flexShrink: 0 }}>
+        {/* Fond */}
+        <circle cx={CX} cy={CY} r={R} fill="none" stroke="var(--bg)" strokeWidth="12" />
+        {/* Accessoires (text3) */}
+        <circle cx={CX} cy={CY} r={R} fill="none"
+          stroke="var(--border)" strokeWidth="12"
+          strokeDasharray={`${accDash} ${circ - accDash}`}
+          strokeDashoffset={accOffset}
+          strokeLinecap="butt" />
+        {/* SBD (accent) */}
+        <circle cx={CX} cy={CY} r={R} fill="none"
+          stroke="var(--accent)" strokeWidth="12"
+          strokeDasharray={`${sbdDash} ${circ - sbdDash}`}
+          strokeDashoffset={sbdOffset}
+          strokeLinecap="butt" />
+        {/* Label central */}
+        <text x={CX} y={CY - 4} textAnchor="middle" fontSize="10" fontWeight="900" fill="var(--accent)">{sbdPct}%</text>
+        <text x={CX} y={CY + 7} textAnchor="middle" fontSize="5" fontWeight="600" fill="var(--text3)">SBD</text>
+      </svg>
+
+      {/* Légende */}
+      <div style={{ flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+          <div style={{ width: 10, height: 10, borderRadius: 2, background: 'var(--accent)', flexShrink: 0 }} />
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)' }}>{sbdPct}% <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)' }}>SBD & variantes</span></div>
+            <div style={{ fontSize: 12, color: 'var(--text3)' }}>{data.sbd} séries</div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ width: 10, height: 10, borderRadius: 2, background: 'var(--border)', flexShrink: 0 }} />
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)' }}>{accPct}% <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)' }}>Accessoires</span></div>
+            <div style={{ fontSize: 12, color: 'var(--text3)' }}>{data.accessoires} séries</div>
+          </div>
+        </div>
       </div>
     </div>
   )
