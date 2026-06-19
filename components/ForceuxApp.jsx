@@ -801,24 +801,15 @@ export default function ForceuxApp() {
             <LiftSeries label="Bench" n={stats?.seriesSemaine?.bench?.series} border />
             <LiftSeries label="Deadlift" n={stats?.seriesSemaine?.deadlift?.series} />
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 10, marginBottom: 24 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 24 }}>
             <div className="stat-card">
               <div className="stat-card-val accent-val">
                 {(() => { const v = stats?.resume?.volumeSemaine || 0; return v >= 1000 ? (v / 1000).toFixed(1) + 't' : Math.round(v) + 'kg' })()}
               </div>
               <div className="stat-card-label">Volume cette semaine</div>
             </div>
-          </div>
-
-          {/* Bloc 3 : Tendance mensuelle */}
-          <div className="section-label">Tendance mensuelle</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
             <div className="stat-card">
-              <div className="stat-card-val">{stats?.resume?.seancesMois || 0}</div>
-              <div className="stat-card-label">Séances ce mois</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-card-val accent-val">
+              <div className="stat-card-val" style={{ color: '#8338EC' }}>
                 {(() => {
                   const d = stats?.rpeParSemaine
                   if (!d) return '—'
@@ -827,6 +818,15 @@ export default function ForceuxApp() {
                 })()}
               </div>
               <div className="stat-card-label">RPE moy. cette sem.</div>
+            </div>
+          </div>
+
+          {/* Bloc 3 : Tendance mensuelle */}
+          <div className="section-label">Tendance mensuelle</div>
+          <div style={{ marginBottom: 10 }}>
+            <div className="stat-card">
+              <div className="stat-card-val">{stats?.resume?.seancesMois || 0}</div>
+              <div className="stat-card-label">Séances ce mois</div>
             </div>
           </div>
           <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: 16, marginBottom: 10 }}>
