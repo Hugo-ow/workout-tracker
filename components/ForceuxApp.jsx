@@ -773,34 +773,38 @@ export default function ForceuxApp() {
           <div className="page-title">Stats</div>
         </div>
         <div className="main-scroll">
+
+          {/* Bloc 1 : PRs — charge max + date */}
           <div className="section-label">Records personnels</div>
           <PRList prs={stats?.prs || []} />
 
+          {/* Bloc 2 : Cette semaine */}
           <div className="section-label" style={{ marginTop: 24 }}>Cette semaine</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden', marginBottom: 10 }}>
+            <LiftSeries label="Squat" n={stats?.seriesSemaine?.squat?.series} border />
+            <LiftSeries label="Bench" n={stats?.seriesSemaine?.bench?.series} border />
+            <LiftSeries label="Deadlift" n={stats?.seriesSemaine?.deadlift?.series} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 24 }}>
             <div className="stat-card">
               <div className="stat-card-val accent-val">
                 {(() => { const v = stats?.resume?.volumeSemaine || 0; return v >= 1000 ? (v / 1000).toFixed(1) + 't' : Math.round(v) + 'kg' })()}
               </div>
-              <div className="stat-card-label">Volume</div>
+              <div className="stat-card-label">Volume cette semaine</div>
             </div>
             <div className="stat-card">
               <div className="stat-card-val">{stats?.resume?.seancesMois || 0}</div>
               <div className="stat-card-label">Séances ce mois</div>
             </div>
           </div>
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden', marginBottom: 24 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr' }}>
-              <LiftSeries label="Squat" n={stats?.seriesSemaine?.squat?.series} border />
-              <LiftSeries label="Bench" n={stats?.seriesSemaine?.bench?.series} border />
-              <LiftSeries label="Deadlift" n={stats?.seriesSemaine?.deadlift?.series} />
-            </div>
+
+          {/* Bloc 3 : Graphique séries par semaine (4 semaines glissantes) */}
+          <div className="section-label">Tendance mensuelle</div>
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: 16, marginBottom: 24 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '.06em' }}>Séries totales / semaine</div>
+            <SeriesLineChart data={stats?.seriesParSemaine || []} />
           </div>
 
-          <div className="section-label">Volume hebdomadaire</div>
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: 16, marginBottom: 24 }}>
-            <VolumeChart data={stats?.volumeParSemaine || []} />
-          </div>
         </div>
       </div>
 
@@ -928,7 +932,7 @@ function PRList({ prs }) {
   if (!prs.length) {
     return <div style={{ padding: 24, textAlign: 'center', color: 'var(--text3)', fontSize: 13, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, marginBottom: 24 }}>Aucun PR enregistré pour l'instant.</div>
   }
-  const priority = ['squat', 'bench', 'deadlift', 'press']
+  const priority = ['squat', 'bench', 'couché', 'deadlift', 'terre', 'militaire']
   const sorted = [...prs].sort((a, b) => {
     let ai = priority.findIndex(k => a.exercice.toLowerCase().includes(k))
     let bi = priority.findIndex(k => b.exercice.toLowerCase().includes(k))
@@ -937,18 +941,23 @@ function PRList({ prs }) {
   })
   return (
     <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden', marginBottom: 24 }}>
-      {sorted.map((pr, i) => (
-        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', borderBottom: i < sorted.length - 1 ? '1px solid var(--divider)' : 'none' }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', textTransform: 'capitalize' }}>{pr.exercice}</div>
-            <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>{pr.best_kg}kg × {pr.best_reps}</div>
+      {sorted.map((pr, i) => {
+        const date = pr.updated_at
+          ? new Date(pr.updated_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })
+          : null
+        return (
+          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: i < sorted.length - 1 ? '1px solid var(--divider)' : 'none' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pr.exercice}</div>
+              {date && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>{date}</div>}
+            </div>
+            <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 12 }}>
+              <div style={{ fontSize: 22, fontWeight: 900, color: 'var(--accent)' }}>{pr.best_kg}<span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text3)' }}>kg</span></div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)' }}>{pr.best_reps} rép.</div>
+            </div>
           </div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 24, fontWeight: 900, color: 'var(--accent)' }}>{pr.estimated_1rm || pr.best_kg}</div>
-            <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text3)' }}>kg 1RM est.</div>
-          </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
@@ -963,17 +972,44 @@ function LiftSeries({ label, n, border }) {
   )
 }
 
-function VolumeChart({ data }) {
+function SeriesLineChart({ data }) {
   if (!data.length) return <div style={{ color: 'var(--text3)', fontSize: 13, textAlign: 'center', padding: 20 }}>Pas encore de données.</div>
-  const max = Math.max(...data.map(s => s.volume)) || 1
+  const max = Math.max(...data.map(d => d.series), 1)
+  const W = 100, H = 80, PAD = 8
+  const pts = data.map((d, i) => {
+    const x = PAD + (i / (data.length - 1 || 1)) * (W - PAD * 2)
+    const y = PAD + (1 - d.series / max) * (H - PAD * 2)
+    return { x, y, ...d }
+  })
+  const pathD = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
+  const fillD = `${pathD} L ${pts[pts.length - 1].x} ${H} L ${pts[0].x} ${H} Z`
   return (
-    <div className="chart-bars">
-      {data.map((s, i) => (
-        <div key={i} className="chart-bar-wrap">
-          <div className={'chart-bar' + (i === data.length - 1 ? ' accent' : '')} style={{ height: (Math.round((s.volume / max) * 100) || 4) + '%' }} />
-          <div className="chart-label">{s.label}</div>
-        </div>
-      ))}
+    <div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 80, overflow: 'visible' }}>
+        {/* Lignes de grille horizontales */}
+        {[0, 0.5, 1].map((v, i) => (
+          <line key={i} x1={PAD} y1={PAD + (1 - v) * (H - PAD * 2)} x2={W - PAD} y2={PAD + (1 - v) * (H - PAD * 2)}
+            stroke="var(--divider)" strokeWidth="0.5" />
+        ))}
+        {/* Zone remplie */}
+        <path d={fillD} fill="rgba(230,57,70,0.08)" />
+        {/* Ligne */}
+        <path d={pathD} fill="none" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        {/* Points */}
+        {pts.map((p, i) => (
+          <circle key={i} cx={p.x} cy={p.y} r="2.5" fill="var(--accent)" />
+        ))}
+        {/* Valeurs au-dessus des points */}
+        {pts.map((p, i) => p.series > 0 && (
+          <text key={i} x={p.x} y={p.y - 5} textAnchor="middle" fontSize="5" fill="var(--text2)" fontWeight="700">{p.series}</text>
+        ))}
+      </svg>
+      {/* Labels en abscisse */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+        {data.map((d, i) => (
+          <div key={i} style={{ fontSize: 10, fontWeight: 600, color: i === data.length - 1 ? 'var(--accent)' : 'var(--text3)', textAlign: 'center', flex: 1 }}>{d.label}</div>
+        ))}
+      </div>
     </div>
   )
 }
