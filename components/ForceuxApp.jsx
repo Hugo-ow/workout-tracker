@@ -235,7 +235,7 @@ export default function ForceuxApp() {
   // ====================================================
   function addExercise(name, group) {
     const uid = 'ex' + (++exCounter)
-    const newSets = [0, 1, 2].map(() => ({ uid: 'set' + (++setCounter), kg: '', reps: '', done: false, pr: false }))
+    const newSets = [0, 1, 2].map(() => ({ uid: 'set' + (++setCounter), kg: '', reps: '', done: false, pr: false, rpe: null }))
     setExercises(prev => [...prev, { uid, name, group, sets: newSets }])
   }
 
@@ -246,7 +246,7 @@ export default function ForceuxApp() {
   function addSet(exUid) {
     setExercises(prev => prev.map(e => {
       if (e.uid !== exUid) return e
-      return { ...e, sets: [...e.sets, { uid: 'set' + (++setCounter), kg: '', reps: '', done: false, pr: false }] }
+      return { ...e, sets: [...e.sets, { uid: 'set' + (++setCounter), kg: '', reps: '', done: false, pr: false, rpe: null }] }
     }))
   }
 
@@ -281,6 +281,13 @@ export default function ForceuxApp() {
       }
       startRest()
     }
+  }
+
+  function setRpe(exUid, setUid, value) {
+    setExercises(prev => prev.map(e => {
+      if (e.uid !== exUid) return e
+      return { ...e, sets: e.sets.map(s => s.uid === setUid ? { ...s, rpe: s.rpe === value ? null : value } : s) }
+    }))
   }
 
   function markPR(exUid, setUid) {
@@ -399,6 +406,7 @@ export default function ForceuxApp() {
         reps: parseInt(s.reps) || null,
         done: s.done,
         isPR: s.pr,
+        rpe: s.rpe ?? null,
       })),
     }))
   }
@@ -721,19 +729,33 @@ export default function ForceuxApp() {
               </div>
               <div className="sets-table-head"><span>#</span><span>Kg</span><span>Reps</span><span></span></div>
               {ex.sets.map((s, i) => (
-                <div key={s.uid} className={'set-row' + (s.done ? ' done' : '') + (s.pr ? ' pr-row' : '')}>
-                  <div className="set-num">{s.pr ? '🏆' : i + 1}</div>
-                  <div>
-                    <input className="set-input" readOnly value={s.kg} placeholder="—"
-                      onClick={() => openNumpad(ex.uid, s.uid, 'kg')} inputMode="none" />
+                <div key={s.uid}>
+                  <div className={'set-row' + (s.done ? ' done' : '') + (s.pr ? ' pr-row' : '')}>
+                    <div className="set-num">
+                      {s.pr ? '🏆' : i + 1}
+                      {s.rpe != null && <div className="rpe-badge">@{s.rpe}</div>}
+                    </div>
+                    <div>
+                      <input className="set-input" readOnly value={s.kg} placeholder="—"
+                        onClick={() => openNumpad(ex.uid, s.uid, 'kg')} inputMode="none" />
+                    </div>
+                    <div>
+                      <input className="set-input" readOnly value={s.reps} placeholder="—"
+                        onClick={() => openNumpad(ex.uid, s.uid, 'reps')} inputMode="none" />
+                    </div>
+                    <div className={'set-check' + (s.done ? ' checked' : '')} onClick={() => toggleSet(ex.uid, s.uid)}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12" /></svg>
+                    </div>
                   </div>
-                  <div>
-                    <input className="set-input" readOnly value={s.reps} placeholder="—"
-                      onClick={() => openNumpad(ex.uid, s.uid, 'reps')} inputMode="none" />
-                  </div>
-                  <div className={'set-check' + (s.done ? ' checked' : '')} onClick={() => toggleSet(ex.uid, s.uid)}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12" /></svg>
-                  </div>
+                  {s.done && (
+                    <div className="rpe-row">
+                      <span className="rpe-label">RPE</span>
+                      {[6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10].map(v => (
+                        <button key={v} className={'rpe-chip' + (s.rpe === v ? ' selected' : '')}
+                          onClick={() => setRpe(ex.uid, s.uid, v)}>{v}</button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
               <button className="add-set-btn" onClick={() => addSet(ex.uid)}>
