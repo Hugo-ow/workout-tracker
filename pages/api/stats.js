@@ -169,6 +169,69 @@ export default async function handler(req, res) {
       ? { sbd: sbdMois, accessoires: accMois, total: setsMois.length }
       : null
 
+    // ── 9. Progression e1RM par lift — 12 dernières semaines ──
+    const debut12semaines = new Date()
+    debut12semaines.setDate(debut12semaines.getDate() - 83) // ~12 semaines
+    debut12semaines.setHours(0,0,0,0)
+
+    const { data: setsSBD } = await supabase
+      .from('seances_sets')
+      .select('exercice, kg, reps, created_at')
+      .eq('user_id', userId)
+      .gte('created_at', debut12semaines.toISOString())
+      .gt('kg', 0)
+      .gt('reps', 0)
+
+    function calc1RM(kg, reps) {
+      if (reps === 1) return kg
+      return Math.round((kg / (1.0278 - 0.0278 * reps)) * 10) / 10
+    }
+
+    // Définition des 3 lifts avec leurs mots-clés
+    const liftDefs = [
+      { key: 'squat',    label: 'Squat',    color: '#E63946', keywords: ['squat'],                                                           excludes: [] },
+      { key: 'bench',    label: 'Bench',    color: '#8338EC', keywords: ['couché', 'couche', 'bench', 'développé couché'],                   excludes: ['décliné', 'incliné', 'militaire', 'arnold'] },
+      { key: 'deadlift', label: 'Deadlift', color: '#3A86FF', keywords: ['soulevé', 'deadlift', 'rdl', 'terre'],                             excludes: [] },
+    ]
+
+    // Grouper par semaine ISO (lundi = début de semaine)
+    function getWeekKey(dateStr) {
+      const d = new Date(dateStr)
+      const day = d.getDay() || 7 // dimanche = 7
+      d.setDate(d.getDate() - day + 1) // ramener au lundi
+      return d.toISOString().slice(0, 10)
+    }
+
+    const progressionSBD = {}
+    for (const lift of liftDefs) {
+      const weekMap = {}
+      setsSBD?.forEach(s => {
+        const nom = (s.exercice || '').toLowerCase()
+        const matches = lift.keywords.some(k => nom.includes(k))
+        const excluded = lift.excludes.some(e => nom.includes(e))
+        if (!matches || excluded) return
+
+        const e1rm = calc1RM(parseFloat(s.kg), parseInt(s.reps))
+        if (!e1rm || e1rm <= 0) return
+
+        const wk = getWeekKey(s.created_at)
+        if (!weekMap[wk] || e1rm > weekMap[wk]) weekMap[wk] = e1rm
+      })
+
+      // Construire les 12 semaines glissantes
+      const points = []
+      const nowD = new Date()
+      for (let i = 11; i >= 0; i--) {
+        const monday = new Date(nowD)
+        monday.setDate(monday.getDate() - monday.getDay() + 1 - i * 7)
+        const wk = monday.toISOString().slice(0, 10)
+        const weekNum = 12 - i
+        const label = i === 0 ? 'S' : `S-${i}`
+        points.push({ label, weekNum, e1rm: weekMap[wk] ?? null })
+      }
+      progressionSBD[lift.key] = { label: lift.label, color: lift.color, points }
+    }
+
     return res.status(200).json({
       resume: {
         streak,
@@ -180,6 +243,7 @@ export default async function handler(req, res) {
       seriesParSemaine,
       rpeParSemaine,
       repartition,
+      progressionSBD,
     })
 
   } catch (err) {
