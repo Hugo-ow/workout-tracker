@@ -842,6 +842,19 @@ export default function ForceuxApp() {
             <SeriesLineChart data={stats?.rpeParSemaine || []} valueKey="rpe" color="#8338EC" minY={5} maxY={10} unit="" />
           </div>
 
+          {/* Bloc 4 : Progression e1RM — 12 semaines */}
+          <div className="section-label">Progression e1RM — 12 semaines</div>
+          {['squat', 'bench', 'deadlift'].map(key => {
+            const lift = stats?.progressionSBD?.[key]
+            if (!lift) return null
+            return (
+              <div key={key} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: 16, marginBottom: 10 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: lift.color, marginBottom: 10, textTransform: 'uppercase', letterSpacing: '.06em' }}>{lift.label}</div>
+                <E1RMChart points={lift.points} color={lift.color} />
+              </div>
+            )
+          })}
+
         </div>
       </div>
 
@@ -1129,6 +1142,98 @@ function SBDPieChart({ data }) {
             <div style={{ fontSize: 12, color: 'var(--text3)' }}>{data.accessoires} séries</div>
           </div>
         </div>
+      </div>
+    </div>
+  )
+}
+
+function E1RMChart({ points, color }) {
+  const values = points.map(p => p.e1rm).filter(v => v != null)
+  if (!values.length) {
+    return <div style={{ color: 'var(--text3)', fontSize: 12, textAlign: 'center', padding: '12px 0' }}>Pas encore de données.</div>
+  }
+
+  const lo = Math.min(...values)
+  const hi = Math.max(...values, lo + 1)
+  // Ajoute un peu de marge verticale pour que les points ne soient pas collés aux bords
+  const pad_y = (hi - lo) * 0.15 || 5
+  const yMin = Math.max(0, lo - pad_y)
+  const yMax = hi + pad_y
+  const range = yMax - yMin
+
+  const W = 100, H = 70, PAD_X = 8, PAD_Y = 8
+
+  const pts = points.map((p, i) => {
+    if (p.e1rm == null) return null
+    const x = PAD_X + (i / (points.length - 1 || 1)) * (W - PAD_X * 2)
+    const y = PAD_Y + (1 - (p.e1rm - yMin) / range) * (H - PAD_Y * 2)
+    return { x, y, v: p.e1rm, label: p.label }
+  })
+
+  // Segments (saute les nulls)
+  const segments = []
+  let seg = []
+  for (const pt of pts) {
+    if (pt) { seg.push(pt) }
+    else { if (seg.length) segments.push(seg); seg = [] }
+  }
+  if (seg.length) segments.push(seg)
+
+  // Dernier PR (valeur la plus récente non-nulle)
+  const lastVal = [...values].pop()
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+        <div style={{ fontSize: 22, fontWeight: 900, color, letterSpacing: '-0.5px' }}>
+          {lastVal}<span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text3)' }}>kg e1RM</span>
+        </div>
+        <div style={{ fontSize: 10, color: 'var(--text3)' }}>12 semaines</div>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 70, overflow: 'visible' }}>
+        {/* Ligne de grille haute (max) et basse (min) */}
+        {[0, 0.5, 1].map((v, i) => (
+          <line key={i}
+            x1={PAD_X} y1={PAD_Y + (1 - v) * (H - PAD_Y * 2)}
+            x2={W - PAD_X} y2={PAD_Y + (1 - v) * (H - PAD_Y * 2)}
+            stroke="var(--divider)" strokeWidth="0.5" />
+        ))}
+        {/* Zone sous la courbe */}
+        {segments.map((s, si) => s.length > 1 && (
+          <path key={'f' + si}
+            d={`${s.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')} L ${s[s.length-1].x} ${H} L ${s[0].x} ${H} Z`}
+            fill={color} opacity="0.07" />
+        ))}
+        {/* Lignes */}
+        {segments.map((s, si) => s.length > 1 && (
+          <path key={'l' + si}
+            d={s.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')}
+            fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        ))}
+        {/* Points */}
+        {pts.map((p, i) => p && (
+          <circle key={i} cx={p.x} cy={p.y} r="2" fill={color} />
+        ))}
+        {/* Valeur dernier point */}
+        {pts[pts.length - 1] && (
+          <text x={pts[pts.length - 1].x} y={pts[pts.length - 1].y - 4}
+            textAnchor="middle" fontSize="4.5" fill={color} fontWeight="800">
+            {pts[pts.length - 1].v}
+          </text>
+        )}
+      </svg>
+      {/* Labels semaines — on affiche S-11, S-8, S-5, S-2, S pour ne pas surcharger */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
+        {points.map((p, i) => {
+          const show = i === 0 || i === 3 || i === 6 || i === 9 || i === points.length - 1
+          return (
+            <div key={i} style={{ flex: 1, fontSize: 9, fontWeight: 600, textAlign: 'center',
+              color: i === points.length - 1 ? color : 'var(--text3)',
+              opacity: show ? 1 : 0 }}>
+              {p.label}
+            </div>
+          )
+        })}
       </div>
     </div>
   )
