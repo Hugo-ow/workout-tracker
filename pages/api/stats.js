@@ -148,7 +148,7 @@ export default async function handler(req, res) {
         return d >= debut && d <= fin
       }) || []
 
-      const label = i === 0 ? 'Cette sem.' : `S-${i}`
+      const label = i === 0 ? 'Cette sem.' : i === 1 ? 'Sem. dern.' : `Il y a ${i} sem.`
       seriesParSemaine.push({ label, series: weekSets.length })
 
       // RPE moyen sur Squat+Bench+DL uniquement
@@ -226,7 +226,7 @@ export default async function handler(req, res) {
         monday.setDate(monday.getDate() - monday.getDay() + 1 - i * 7)
         const wk = monday.toISOString().slice(0, 10)
         const weekNum = 12 - i
-        const label = i === 0 ? 'S' : `S-${i}`
+        const label = i === 0 ? "Auj." : monday.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }).replace('.', '')
         points.push({ label, weekNum, e1rm: weekMap[wk] ?? null })
       }
       progressionSBD[lift.key] = { label: lift.label, color: lift.color, points }
